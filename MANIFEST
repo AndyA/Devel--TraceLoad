@@ -1,9 +1,22 @@
 Changes
-MANIFEST
-META.yml # Will be created by "make dist"
-Makefile.PL
-README
 lib/Devel/TraceLoad.pm
+Makefile.PL
+MANIFEST
+README
 t/00.load.t
+t/all.t
+t/Data/Bar.pm
+t/Data/toload.pl
+t/longest.pl
+t/longest.ref
 t/pod-coverage.t
 t/pod.t
+t/require_use.pl
+t/require_use.ref
+t/simplest.pl
+t/simplest.ref
+t/Test/Wrapper.pm
+t/transparency.pl
+t/transparency.ref
+t/version_num.pl
+t/version_num.ref
