@@ -1,183 +1,401 @@
 package Devel::TraceLoad;
 
-# use warnings;
-# use strict;
-# use Carp;
-
 require 5.6.1;
 
-use version; our $VERSION = qv( '0.9.0' );
+use warnings;
+use strict;
+use Carp;
+use Scalar::Util qw/isvstring/;
+use Devel::TraceLoad::Hook qw/register_require_hook/;
 
-sub trace;
+use vars qw/$VERSION/;
+$VERSION = '0.9.0';
 
-my $pkg = __PACKAGE__;
-my @info;
-my $outfh;
-my $indent;
-my $filter = '[.](al|ix)';
-
-# please, define the separator of your platform and send me a mail
-my $dirsep = { MSWin32 => '/', }->{$^O} || '/';
+use constant OUTFILE => 'traceload';
 
 my %opts = (
-    after     => 0,
-    all       => 0,
-    flat      => 0,
-    pretty    => 0,
-    noversion => 0,
-    path      => 0,
-    stdout    => 0,
-    sort      => 0,
-    test      => 0,    # for easy comparaison with the core require
-    trace     => 0,    # non stop trace
-    s_by_s    => 0,    # trace associated to an execution stop
+    after   => 0,    # Display summary after execution
+    during  => 0,    # Display loads as they happen
+    yaml    => 0,    # Summary is YAML, implies after
+    dump    => 0,    # Dump to 'traceload' in the current dir
+    summary => 0,    # Display summary of dependencies
+    stdout  => 0,    # Output to stdout
+
+    # after     => 0,  # Display information about loaded modules on exit
+    # all       => 0,  # Display modules already loaded before D::T was loaded
+    # flat      => 0,  # Don't indent, display first load only
+    # pretty    => 0,  # Display rule above, below output at script exit
+    # noversion => 0,
+    # path      => 0,
+    # stdout    => 0,
+    # sort      => 0,
+    # test      => 0,  # for easy comparaison with the core require
+    # trace     => 0,  # non stop trace
+    # s_by_s    => 0,  # trace associated to an execution stop
 );
 
-sub import {
-    shift;
-    $opts{$_} = 1 foreach @_;
-    $outfh = $opts{stdout} ? *STDOUT : *STDERR;
-    $opts{after} = 1 if $opts{sort};
-    $opts{after} = 1 if $opts{test};
-    *trace = $opts{s_by_s}
-      ? sub {
-        print STDERR "line ", ( caller( 0 ) )[2], ": ", "@_";
-        <>;
-      }
-      : $opts{trace}
-      ? sub {
-        print STDERR "@_\n";
-      }
-      : sub { };
-    $indent = $opts{flat} ? '' : '   ';
-    if ( $opts{all} ) {
-        print $outfh join( "\n\t", "Already loaded:", keys %INC ) . "\n";
+sub _is_version {
+    my $ver = shift;
+    return unless defined $ver;
+    return join '.', map ord, split //, $ver if isvstring( $ver );
+    return $ver if $ver =~ /^ \d+ (?: [.] \d+ )* $/x;
+    return;
+}
+
+sub _get_version {
+    my $pkg = shift;
+    no strict 'refs';
+    return _is_version( ${"${pkg}::VERSION"} );
+}
+
+sub _get_module {
+    my $file = shift;
+    return $file if $file =~ m{^/};
+    $file =~ s{/}{::}g;
+    $file =~ s/[.]pm$//;
+    return $file;
+}
+
+sub _text_out {
+    my ( $fh, $log, $depth ) = @_;
+    my $pad = '  ' x $depth;
+
+    for my $info ( @$log ) {
+        my @comment = ();
+
+        push @comment, defined $info->{version}
+          ? "version: $info->{version}"
+          : 'no version';
+
+        if ( my $err = $info->{error} ) {
+            $err =~ s/\(.*//g;
+            $err =~ s/\s+/ /g;
+            $err =~ s/\s+$//;
+            push @comment, "error: $err";
+        }
+
+        print $fh sprintf( "%s%s (%s), line %d: %s%s\n",
+            $pad, $info->{file}, $info->{pkg}, $info->{line}, $info->{module},
+            ( @comment ? ' (' . join( ', ', @comment ) . ')' : '' ) );
+        _text_out( $fh, $info->{nested}, $depth + 1 );
     }
 }
 
-BEGIN {
-    my $level  = -1;
-    my $prefix = '';
-    *CORE::GLOBAL::require = sub (*) {
-        trace join ', ', ( caller( 0 ) )[ 0, 1, 2, 3, 4 ];
-        # if you uncomment this line, you obtain some strange results???
-        #trace "require's args: @_";
-        my ( $arg, $rstatus );
-        unless ( @_ ) {
-            # this feature described in the documentation
-            # doesn't work on my ActiveState Perl
-            $arg = $_;
+sub _gather_deps {
+    my ( $by_dep, $log ) = @_;
+    for my $info ( @$log ) {
+        push @{ $by_dep->{ $info->{module} } }, $info;
+        _gather_deps( $by_dep, $info->{nested} );
+    }
+}
+
+sub _underline {
+    my $str = shift;
+    return "$str\n" . ( '=' x length( $str ) ) . "\n";
+}
+
+{
+    my @load_log    = ();
+    my @version_log = ();
+
+    sub import {
+        my $class = shift;
+
+        # Parse args
+        for my $arg ( @_ ) {
+            my $set = ( $arg =~ s/^([+-])(.+)/$2/ ) ? ( $1 eq '+' || 0 ) : 1;
+            croak "Unknown option: $arg" unless exists $opts{$arg};
+            $opts{$arg} = $set;
         }
-        else {
-            $arg = $_[0];
-        }
-        unless ( $arg =~ /^[A-Za-z\d_]/ ) {    # certainly a version number
-            $arg = join '.', map { ord } split //, $arg;
-            trace "Convert char to number: $arg";
-        }
-        if ( $arg =~ /^\d[\d.]*$/ ) {
-            trace "required version: $arg";
-            $rstatus = eval { return CORE::require $_[0] };
-            if ( $@ ) {                        # recontextualize
-                trace "error: $@";
-                #$@ =~ s/at \(eval \d+\) line \d+/
-                $@ =~ s/at .* line \d+[.]/
-		    sprintf "at %s line %d.",(caller())[1,2]/e;
-                die $@;
+
+        # dump, yaml imply after
+        $opts{after} ||= $opts{yaml} || $opts{dump} || !$opts{during};
+
+        $opts{fh}        = $opts{stdout} ? \*STDOUT : \*STDERR;
+        $opts{dump_name} = OUTFILE;
+        $opts{enabled}   = 1;
+
+        if ( $opts{yaml} ) {
+            eval 'use YAML';
+            if ( $@ ) {
+                $opts{yaml}  = 0;
+                $opts{after} = 0;
+                croak "YAML not available";
             }
-            trace "status: $rstatus";
-            return $rstatus;
+            $opts{dump_name} .= '.yaml';
         }
-        unless ( $opts{flat} ) {
-            $prefix = $INC{$mod} ? '.' : '+';
+
+        my @stack   = ( \@load_log );
+        my $exclude = qr{ [.] (?: al | ix ) $}x;
+
+        # Register callback function
+        register_require_hook(
+            sub {
+                my ( $when, $depth, $arg, $p, $f, $l, $rc, $err ) = @_;
+
+                return unless $opts{enabled};
+                return if $arg =~ $exclude;
+
+                # require <version>
+                if ( my $ver = _is_version( $arg ) ) {
+                    if ( $when eq 'before' ) {
+                        my $info = {
+                            file    => $f,
+                            line    => $l,
+                            pkg     => $p,
+                            version => $ver,    # Version desired
+                        };
+
+                        push @version_log, $info;
+                    }
+                }
+                else {
+                    if ( $when eq 'before' ) {
+                        my $module = _get_module( $arg );
+
+                        if ( $opts{during} ) {
+                            my $pad = '  ' x ( $depth - 1 );
+                            my $fh = $opts{fh};
+                            print $fh "$pad$f, line $l: $module\n";
+                        }
+
+                        my $info = {
+                            file   => $f,         # File executing require
+                            line   => $l,         # Line # of require
+                            pkg    => $p,         # Package executing require
+                            module => $module,    # Module being required
+                            nested => [],         # List of nested requires
+                        };
+
+                        push @{ $stack[-1] }, $info;
+                        push @stack, $info->{nested};
+                    }
+                    elsif ( $when eq 'after' ) {
+                        pop @stack;
+                        my $info = $stack[-1][-1];
+                        $info->{rc} = $rc;
+                        if ( $err ) {
+                            $info->{error} = $err;
+                        }
+                        else {
+                            $info->{version} = _get_version( $info->{module} );
+                        }
+                    }
+                }
+            }
+        );
+    }
+
+    END {
+        if ( $opts{after} ) {
+            $opts{enabled} = 0;
+            my $fh = $opts{fh};
+            if ( $opts{dump} ) {
+                open $fh, '>', $opts{dump_name}
+                  or croak "Can't write $opts{dump_name} ($!)";
+            }
+
+            if ( $opts{yaml} ) {
+                print $fh Dump( \@load_log );
+            }
+            else {
+                print $fh "\n", _underline( "Loaded Modules" ), "\n";
+                _text_out( $fh, \@load_log, 0 );
+            }
         }
-        else {
-            $prefix = '';
+
+        if ( $opts{summary} ) {
+            my $fh = $opts{fh};
+            print $fh "\n", _underline( "Loaded Modules Xref" ), "\n";
+            my %loaded = ();
+            _gather_deps( \%loaded, \@load_log );
+            my $cmp_info = sub {
+                return lc $a->{pkg} cmp lc $b->{pkg}
+                  || $a->{line} <=> $b->{line};
+            };
+            for my $module ( sort { lc $a cmp lc $b } keys %loaded ) {
+                my $ver = _get_version( $module );
+                print $fh $module, defined $ver ? " ($ver)" : '', "\n";
+
+                for my $info ( sort $cmp_info @{ $loaded{$module} } ) {
+                    print sprintf( "    %s (%s), line %d\n",
+                        $info->{file}, $info->{pkg}, $info->{line} );
+                }
+            }
         }
-        return 1 if $INC{$mod} && $opts{flat};
-        $level++ unless $opts{flat};
-        unless ( $opts{after} ) {
-            print $outfh $indent x $level, "$prefix$arg";
-            print $outfh $indent x $level, " [from: ",
-              join( " ", ( caller() )[ 1, 2 ] ), "]\n";
-        }
-        else {
-            push @info, [ $arg => $level ];
-        }
-        $rstatus = eval { return CORE::require $_[0] };
-        if ( $@ ) {    # recontextualize
-            trace "error: $@";
-            pop @info if $opts{after};
-            $level-- unless $opts{flat};
-            $@
-              =~ s/at .* line \d+[.]/sprintf "at %s line %d.", (caller())[1,2]/e;
-            die $@;
-        }
-        $level-- unless $opts{flat};
-        trace "status: $rstatus";
-        return $rstatus;
-    };
+    }
 }
 
-END {
-    trace "END block";
-    return unless $opts{after};
-    return if $opts{test};
-    my ( $mod, $level, $inc, $path, $version );
-    #while (my($k, $v) = each %INC) { trace "$k -> $v"; }
-    foreach ( @info ) {
-        $mod = $_->[0];
-        trace "mod: $mod";
-        if ( $mod =~ /$filter/o or $mod eq __PACKAGE__ ) {
-            $_->[0] = '';
-            next;
-        }
-        $inc = $mod;
-        if ( $mod =~ s![.]pm$!! ) {
-            $mod =~ s!$dirsep!::!g;
-        }
-        else {
-            $inc =~ s!::!$dirsep!g;
-            $inc .= ".pm";
-        }
-        $version = $opts{noversion} ? '' : ${"$mod\::VERSION"}
-          || '(no version number)';
-        $path = $INC{$inc};
-        push @$_, $path, $version;
-    }
-    if ( $opts{sort} ) {
-        $opts{flat} = 1;
-        $indent = $opts{flat} ? '' : '   ';
-        my %dejavu;
-        if ( $opts{path} ) {
-            @info = sort { $a->[2] cmp $b->[2] }
-              grep { !$dejavu{ $_->[2] }++ } @info;
-        }
-        else {
-            @info = sort { $a->[0] cmp $b->[0] }
-              grep { !$dejavu{ $_->[0] }++ } @info;
-        }
-    }
-    print $outfh "=" x 80, "\n" if $opts{pretty};
-    foreach ( @info ) {
-        ( $mod, $level, $path, $version ) = @$_;
-        next unless $mod;
-        if ( $opts{path} ) {
-            print $outfh $indent x $level . "$path\n";
-        }
-        else {
-            print $outfh $indent x $level . "$mod $version\n";
-        }
-    }
-    print $outfh "=" x 80, "\n" if $opts{pretty};
-}
-
-sub DB::DB {
-    if ( $opts{stop} ) {
-        trace "STOP";
-        exit;
-    }
-}
+# sub trace;
+#
+# my $pkg = __PACKAGE__;
+# my @info;
+# my $outfh;
+# my $indent;
+# my $filter = '[.](al|ix)';
+#
+# # please, define the separator of your platform and send me a mail
+# my $dirsep = { MSWin32 => '/', }->{$^O} || '/';
+#
+# my %opts = (
+#     after     => 0,
+#     all       => 0,
+#     flat      => 0,
+#     pretty    => 0,
+#     noversion => 0,
+#     path      => 0,
+#     stdout    => 0,
+#     sort      => 0,
+#     test      => 0,    # for easy comparaison with the core require
+#     trace     => 0,    # non stop trace
+#     s_by_s    => 0,    # trace associated to an execution stop
+# );
+#
+# sub import {
+#     shift;
+#     $opts{$_} = 1 foreach @_;
+#     $outfh = $opts{stdout} ? *STDOUT : *STDERR;
+#     $opts{after} = 1 if $opts{sort};
+#     $opts{after} = 1 if $opts{test};
+#     *trace = $opts{s_by_s}
+#       ? sub {
+#         print STDERR "line ", ( caller( 0 ) )[2], ": ", "@_";
+#         <>;
+#       }
+#       : $opts{trace}
+#       ? sub {
+#         print STDERR "@_\n";
+#       }
+#       : sub { };
+#     $indent = $opts{flat} ? '' : '   ';
+#     if ( $opts{all} ) {
+#         print $outfh join( "\n\t", "Already loaded:", keys %INC ) . "\n";
+#     }
+# }
+#
+# BEGIN {
+#     my $level  = -1;
+#     my $prefix = '';
+#     *CORE::GLOBAL::require = sub (*) {
+#         trace join ', ', ( caller( 0 ) )[ 0, 1, 2, 3, 4 ];
+#         # if you uncomment this line, you obtain some strange results???
+#         #trace "require's args: @_";
+#         my ( $arg, $rstatus );
+#         unless ( @_ ) {
+#             # this feature described in the documentation
+#             # doesn't work on my ActiveState Perl
+#             $arg = $_;
+#         }
+#         else {
+#             $arg = $_[0];
+#         }
+#         unless ( $arg =~ /^[A-Za-z\d_]/ ) {    # certainly a version number
+#             $arg = join '.', map { ord } split //, $arg;
+#             trace "Convert char to number: $arg";
+#         }
+#         if ( $arg =~ /^\d[\d.]*$/ ) {
+#             trace "required version: $arg";
+#             $rstatus = eval { return CORE::require $_[0] };
+#             if ( $@ ) {                        # recontextualize
+#                 trace "error: $@";
+#                 #$@ =~ s/at \(eval \d+\) line \d+/
+#                 $@ =~ s/at .* line \d+[.]/
+#           sprintf "at %s line %d.",(caller())[1,2]/e;
+#                 die $@;
+#             }
+#             trace "status: $rstatus";
+#             return $rstatus;
+#         }
+#         unless ( $opts{flat} ) {
+#             $prefix = $INC{$mod} ? '.' : '+';
+#         }
+#         else {
+#             $prefix = '';
+#         }
+#         return 1 if $INC{$mod} && $opts{flat};
+#         $level++ unless $opts{flat};
+#         unless ( $opts{after} ) {
+#             print $outfh $indent x $level, "$prefix$arg";
+#             print $outfh $indent x $level, " [from: ",
+#               join( " ", ( caller() )[ 1, 2 ] ), "]\n";
+#         }
+#         else {
+#             push @info, [ $arg => $level ];
+#         }
+#         $rstatus = eval { return CORE::require $_[0] };
+#         if ( $@ ) {    # recontextualize
+#             trace "error: $@";
+#             pop @info if $opts{after};
+#             $level-- unless $opts{flat};
+#             $@
+#               =~ s/at .* line \d+[.]/sprintf "at %s line %d.", (caller())[1,2]/e;
+#             die $@;
+#         }
+#         $level-- unless $opts{flat};
+#         trace "status: $rstatus";
+#         return $rstatus;
+#     };
+# }
+#
+# END {
+#     trace "END block";
+#     return unless $opts{after};
+#     return if $opts{test};
+#     my ( $mod, $level, $inc, $path, $version );
+#     #while (my($k, $v) = each %INC) { trace "$k -> $v"; }
+#     foreach ( @info ) {
+#         $mod = $_->[0];
+#         trace "mod: $mod";
+#         if ( $mod =~ /$filter/o or $mod eq __PACKAGE__ ) {
+#             $_->[0] = '';
+#             next;
+#         }
+#         $inc = $mod;
+#         if ( $mod =~ s![.]pm$!! ) {
+#             $mod =~ s!$dirsep!::!g;
+#         }
+#         else {
+#             $inc =~ s!::!$dirsep!g;
+#             $inc .= ".pm";
+#         }
+#         $version = $opts{noversion} ? '' : ${"$mod\::VERSION"}
+#           || '(no version number)';
+#         $path = $INC{$inc};
+#         push @$_, $path, $version;
+#     }
+#     if ( $opts{sort} ) {
+#         $opts{flat} = 1;
+#         $indent = $opts{flat} ? '' : '   ';
+#         my %dejavu;
+#         if ( $opts{path} ) {
+#             @info = sort { $a->[2] cmp $b->[2] }
+#               grep { !$dejavu{ $_->[2] }++ } @info;
+#         }
+#         else {
+#             @info = sort { $a->[0] cmp $b->[0] }
+#               grep { !$dejavu{ $_->[0] }++ } @info;
+#         }
+#     }
+#     print $outfh "=" x 80, "\n" if $opts{pretty};
+#     foreach ( @info ) {
+#         ( $mod, $level, $path, $version ) = @$_;
+#         next unless $mod;
+#         if ( $opts{path} ) {
+#             print $outfh $indent x $level . "$path\n";
+#         }
+#         else {
+#             print $outfh $indent x $level . "$mod $version\n";
+#         }
+#     }
+#     print $outfh "=" x 80, "\n" if $opts{pretty};
+# }
+#
+# sub DB::DB {
+#     if ( $opts{stop} ) {
+#         trace "STOP";
+#         exit;
+#     }
+# }
 1;
 __END__
 
