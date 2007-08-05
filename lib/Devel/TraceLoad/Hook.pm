@@ -16,7 +16,7 @@ BEGIN {
     *CORE::GLOBAL::require = sub {
 
         my ( $p, $f, $l ) = caller;
-        my $arg = @_ ? shift : $_;
+        my $arg = @_ ? $_[0] : $_;
         my $rc;
 
         $depth++;
@@ -24,19 +24,28 @@ BEGIN {
         # If a 'before' hook throws an error we'll still call the
         # 'after' hooks - to keep everything in balance.
         eval { _call_hooks( 'before', $depth, $arg, $p, $f, $l ) };
+        # _call_hooks( 'before', $depth, $arg, $p, $f, $l );
 
         # Only call require if the 'before' hooks succeeded.
         $rc = eval { CORE::require $arg } unless $@;
 
-        # Call the 'after' hooks whatever happened. If they throw an error
-        # we'll lose any preceding error - but then 'after' hooks aren't
-        # supposed to fail.
-        eval { _call_hooks( 'after', $depth, $arg, $p, $f, $l, $rc, $@ ) };
+        # Save the error for later
+        my $err = $@;
+
+        # Call the 'after' hooks whatever happened.
+        {
+            local $@;    # Things break if we trample on $@
+            eval { _call_hooks( 'after', $depth, $arg, $p, $f, $l, $rc, $err ) };
+            if ( my $err = $@) {
+                $err =~ s/\s+/ /g;
+                warn "Unexpected error $err in require hook\n";
+            }
+        }
 
         $depth--;
 
-        if ( my $err = $@ ) {
-            # Patch up error message
+        if ( $err ) {
+            # TODO: We don't seem to get the expected line number fix up here
             $err =~ s/at \s+ .*? \s+ line \s+ \d+/at $f line $l/x;
             die $err;
         }

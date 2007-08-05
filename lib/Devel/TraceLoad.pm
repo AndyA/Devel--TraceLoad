@@ -1,6 +1,6 @@
 package Devel::TraceLoad;
 
-require 5.6.1;
+#require 5.6.1;
 
 use warnings;
 use strict;

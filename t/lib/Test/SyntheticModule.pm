@@ -6,7 +6,6 @@ use Carp;
 use File::Temp qw/tempdir/;
 use File::Path;
 use File::Spec;
-use File::Basename;
 
 use base qw(Exporter);
 use vars qw(@EXPORT_OK $VERSION);
@@ -18,7 +17,6 @@ my $next_module = 'AAAAAAAA';
 
 BEGIN {
     $base_dir = tempdir();
-    warn "temp dir is $base_dir\n";
     # Include our temp directory in @INC
     unshift @INC, $base_dir;
 }
@@ -46,10 +44,11 @@ sub make_module {
     push @src, "1;";
 
     mkpath( _dirname( $file ) );
+
+    # Write the module
     open my $mh, '>', $file or croak "Can't write $file ($!)\n";
     print $mh join("\n", @src), "\n";
     close $mh;
-    warn join "\n", @src, "\n";
 
     return wantarray ? ( $name, $file ) : $name;
 }

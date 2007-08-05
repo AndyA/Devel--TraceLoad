@@ -20,3 +20,4 @@
 ^try[.]store$
 ^TODO$
 \.swp$
+^traceload
