@@ -1,5 +1,21 @@
 Revision history for Devel-TraceLoad
 
-0.1 Tue Jul 31 13:27:30 2007
-    Initial release.
+0.04    2001-04-18
+        - added tests
+
+0.05    2001-04-20
+    - minor documentation enhancements
+    - test corrections
+
+0.06    2001-06-18
+    - minor documentation enhancements
+    - test corrections
+
+0.08    2001-12-12
+    - nearly complete rewritting of the overriding require()
+    - test corrections thanks to Mooney Christophe <CMOONEY1@motorola.com>
+      I hope tests work correctly on non Win32 plateform.
+
+0.9.0   2007-08-04
+    - complete rewrite
 
