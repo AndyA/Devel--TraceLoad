@@ -7,7 +7,7 @@ use base qw(Exporter);
 use vars qw/$VERSION @EXPORT_OK/;
 
 @EXPORT_OK = qw( register_require_hook );
-$VERSION = '0.9.0';
+$VERSION   = '0.9.0';
 
 my @hooks;
 
@@ -17,12 +17,21 @@ BEGIN {
 
         my ( $p, $f, $l ) = caller;
         my $arg = @_ ? shift : $_;
+        my $rc;
 
         $depth++;
 
-        _call_hooks( 'before', $depth, $arg, $p, $f, $l );
-        my $rc = eval { CORE::require $arg };
-        _call_hooks( 'after', $depth, $arg, $p, $f, $l, $rc, $@ );
+        # If a 'before' hook throws an error we'll still call the
+        # 'after' hooks - to keep everything in balance.
+        eval { _call_hooks( 'before', $depth, $arg, $p, $f, $l ) };
+
+        # Only call require if the 'before' hooks succeeded.
+        $rc = eval { CORE::require $arg } unless $@;
+
+        # Call the 'after' hooks whatever happened. If they throw an error
+        # we'll lose any preceding error - but then 'after' hooks aren't
+        # supposed to fail.
+        eval { _call_hooks( 'after', $depth, $arg, $p, $f, $l, $rc, $@ ) };
 
         $depth--;
 
@@ -35,7 +44,22 @@ BEGIN {
     };
 }
 
-sub _call_hooks { $_->( @_ ) for @hooks }
+sub _call_hooks {
+    my @errs = ();
+
+    for my $hook ( @hooks ) {
+        eval { $hook->( @_ ) };
+        push @errs, $@ if $@;
+    }
+
+    # Rethrow after calling all the hooks. We assume that usually only
+    # one hook will fail and that we'll be rethrowing that error here -
+    # but we concatenate all the errors so that when multiple hooks fail
+    # someone gets to see the diagnostic.
+
+    die join( ', ', @errs ) if @errs;
+}
+
 sub register_require_hook { push @hooks, @_ }
 
 1;
