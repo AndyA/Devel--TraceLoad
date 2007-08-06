@@ -11,46 +11,61 @@ $VERSION   = '0.9.0';
 
 my @hooks;
 
-BEGIN {
-    my $depth = 0;
-    *CORE::GLOBAL::require = sub {
+{
+    my $installed = 0;
+    sub _install_hook {
+        return if $installed;
+        my $depth = 0;
+        no warnings 'redefine';
+        *CORE::GLOBAL::require = sub {
 
-        my ( $p, $f, $l ) = caller;
-        my $arg = @_ ? $_[0] : $_;
-        my $rc;
+            my ( $p, $f, $l ) = caller;
+            my $arg = @_ ? $_[0] : $_;
+            my $rc;
 
-        $depth++;
+            $depth++;
 
-        # If a 'before' hook throws an error we'll still call the
-        # 'after' hooks - to keep everything in balance.
-        eval { _call_hooks( 'before', $depth, $arg, $p, $f, $l ) };
-        # _call_hooks( 'before', $depth, $arg, $p, $f, $l );
+            # If a 'before' hook throws an error we'll still call the
+            # 'after' hooks - to keep everything in balance.
+            eval { _call_hooks( 'before', $depth, $arg, $p, $f, $l ) };
+            # _call_hooks( 'before', $depth, $arg, $p, $f, $l );
 
-        # Only call require if the 'before' hooks succeeded.
-        $rc = eval { CORE::require $arg } unless $@;
+            # Only call require if the 'before' hooks succeeded.
+            $rc = eval { CORE::require $arg } unless $@;
 
-        # Save the error for later
-        my $err = $@;
+            # Save the error for later
+            my $err = $@;
 
-        # Call the 'after' hooks whatever happened.
-        {
-            local $@;    # Things break if we trample on $@
-            eval { _call_hooks( 'after', $depth, $arg, $p, $f, $l, $rc, $err ) };
-            if ( my $err = $@) {
-                $err =~ s/\s+/ /g;
-                warn "Unexpected error $err in require hook\n";
+            # Call the 'after' hooks whatever happened.
+            {
+                local $@;    # Things break if we trample on $@
+                eval {
+                    _call_hooks( 'after', $depth, $arg, $p, $f, $l, $rc, $err );
+                };
+                if ( my $err = $@ ) {
+                    $err =~ s/\s+/ /g;
+                    warn "Unexpected error $err in require hook\n";
+                }
             }
-        }
 
-        $depth--;
+            $depth--;
 
-        if ( $err ) {
-            # TODO: We don't seem to get the expected line number fix up here
-            $err =~ s/at \s+ .*? \s+ line \s+ \d+/at $f line $l/x;
-            die $err;
-        }
-        return $rc;
-    };
+            if ( $err ) {
+               # TODO: We don't seem to get the expected line number fix up here
+                $err =~ s/at \s+ .*? \s+ line \s+ \d+/at $f line $l/x;
+                die $err;
+            }
+            return $rc;
+        };
+        $installed++;
+    }
+}
+
+sub import {
+    my $pkg = shift;
+    _install_hook();
+    local $Exporter::ExportLevel += 1;
+    return $pkg->SUPER::import( @_ );
 }
 
 sub _call_hooks {
