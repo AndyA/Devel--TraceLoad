@@ -13,6 +13,7 @@ my @hooks;
 
 {
     my $installed = 0;
+
     sub _install_hook {
         return if $installed;
         my $depth = 0;
@@ -28,6 +29,7 @@ my @hooks;
             # If a 'before' hook throws an error we'll still call the
             # 'after' hooks - to keep everything in balance.
             eval { _call_hooks( 'before', $depth, $arg, $p, $f, $l ) };
+
             # _call_hooks( 'before', $depth, $arg, $p, $f, $l );
 
             # Only call require if the 'before' hooks succeeded.
@@ -51,6 +53,7 @@ my @hooks;
             $depth--;
 
             if ( $err ) {
+
                # TODO: We don't seem to get the expected line number fix up here
                 $err =~ s/at \s+ .*? \s+ line \s+ \d+/at $f line $l/x;
                 die $err;
