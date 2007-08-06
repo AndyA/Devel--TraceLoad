@@ -22,14 +22,21 @@ my %opts = (
     stdout  => 0,    # Output to stdout
 );
 
+# Naughty: used by the test suite
+sub _option {
+    my $name = shift;
+    $opts{$name} = shift if @_;
+    return $opts{name};
+}
+
 sub _is_version {
     my $ver = shift;
     return unless defined $ver;
     if ( isvstring( $ver ) ) {
         my ( $num, @parts ) = map ord, split //, $ver;
+        # Convert to fp number
         return $num . '.' . join( '', map { sprintf( "%03d", $_ ) } @parts );
     }
-    # return join '.', map ord, split //, $ver if isvstring( $ver );
     return $ver if $ver =~ /^ \d+ (?: [.] \d+ )* $/x;
     return;
 }
@@ -196,7 +203,7 @@ sub _underline {
                     _text_out( $fh, \@load_log, 0 );
                 }
                 else {
-                    print "No modules loaded\n";
+                    print $fh "No modules loaded\n";
                 }
             }
         }
@@ -221,13 +228,13 @@ sub _underline {
                     print $fh $module, defined $ver ? " ($ver)" : '', "\n";
 
                     for my $info ( sort $cmp_info @{ $loaded{$module} } ) {
-                        print sprintf( "    %s (%s), line %d\n",
+                        print $fh sprintf( "    %s (%s), line %d\n",
                             $info->{file}, $info->{pkg}, $info->{line} );
                     }
                 }
             }
             else {
-                print "No modules loaded\n";
+                print $fh "No modules loaded\n";
             }
 
             # Required versions
@@ -243,7 +250,7 @@ sub _underline {
                 }
             }
             else {
-                print "No versions required\n";
+                print $fh "No versions required\n";
             }
 
         }
