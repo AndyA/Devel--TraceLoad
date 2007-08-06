@@ -30,8 +30,6 @@ my @hooks;
             # 'after' hooks - to keep everything in balance.
             eval { _call_hooks( 'before', $depth, $arg, $p, $f, $l ) };
 
-            # _call_hooks( 'before', $depth, $arg, $p, $f, $l );
-
             # Only call require if the 'before' hooks succeeded.
             $rc = eval { CORE::require $arg } unless $@;
 
