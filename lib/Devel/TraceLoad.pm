@@ -8,6 +8,16 @@ use Carp;
 use Scalar::Util qw/isvstring/;
 use Devel::TraceLoad::Hook qw/register_require_hook/;
 
+=head1 NAME
+
+Devel::TraceLoad - Discover which modules a Perl program loads.
+
+=head1 VERSION
+
+This document describes Devel::TraceLoad version 0.9.0
+
+=cut
+
 use vars qw/$VERSION/;
 $VERSION = '0.9.0';
 
@@ -261,14 +271,6 @@ sub _underline {
 
 __END__
 
-=head1 NAME
-
-Devel::TraceLoad - Discover which modules a Perl program loads.
-
-=head1 VERSION
-
-This document describes Devel::TraceLoad version 0.9.0
-
 =head1 SYNOPSIS
 
     $ perl -MDevel::TraceLoad=summary my_prog.pl
@@ -305,12 +307,6 @@ This document describes Devel::TraceLoad version 0.9.0
 =head1 DESCRIPTION
 
 =head1 INTERFACE 
-
-=over
-
-=item C<< new >>
-
-=back
 
 =head1 CONFIGURATION AND ENVIRONMENT
   
