@@ -96,6 +96,10 @@ for my $test ( @schedule ) {
     my $cmd = join( ' ', @cmd );
     #diag "Running $cmd\n";
 
+    if ( $^O =~ /Win32/ || $^O eq 'VMS' ) {
+	@cmd = join ' ', map { qq{"$_"} } @cmd;
+    }
+
     open( my $ch, '-|', @cmd ) or die "Can't run $cmd";
     chomp( my @stdout = <$ch> );
     close $ch or die "Can't run $cmd";
