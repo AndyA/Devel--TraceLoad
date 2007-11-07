@@ -3,11 +3,35 @@ package Devel::TraceLoad::Hook;
 use strict;
 use warnings;
 
+=head1 NAME
+
+Devel::TraceLoad::Hook - Install a hook function to be called for each require.
+
+=head1 VERSION
+
+This document describes Devel::TraceLoad::Hook version 0.9.1
+
+=head1 SYNOPSIS
+
+    register_require_hook( sub {
+        my ( $when, $depth, $arg, $p, $f, $l, $rc, $err ) = @_;
+        # ... do stuff ...
+    } ); 
+
+=head1 DESCRIPTION
+
+Allows hook functions that will be called before and after each
+C<require> (and C<use>) to be registered.
+
+=head1 INTERFACE 
+
+=cut
+
 use base qw(Exporter);
 use vars qw/$VERSION @EXPORT_OK/;
 
 @EXPORT_OK = qw( register_require_hook );
-$VERSION   = '0.9.0';
+$VERSION   = '0.9.1';
 
 my @hooks;
 
@@ -85,34 +109,62 @@ sub _call_hooks {
     die join( ', ', @errs ) if @errs;
 }
 
+=head2 C<< register_require_hook >>
+
+Register a function to be called immediately before and after each
+C<require> (and C<use>).
+
+The registered function should look something like this:
+
+    sub done_require {
+        my ( $when, $depth, $arg, $p, $f, $l, $rc, $err ) = @_;
+        # ... do stuff ...
+    }
+    
+The arguments are as follows:
+
+=over
+
+=item C<$when>
+
+The hook function is called both before and after the require is
+executed. The first argument will contain either 'before' or 'after' as
+appropriate.
+
+=item C<$depth>
+
+How deeply nested this require is.
+
+=item C<$arg>
+
+The argument to C<require>.
+
+=item C<$p>, C<$f>, C<$l>
+
+The package, file and line where the calling C<require> or C<use> is.
+
+=item C<$rc>, C<$err>
+
+When the hook function is called after a C<require> C<$rc> and
+C<$err> will contain the return value of the require and any error
+that it raised.
+
+=back
+
+You may throw an error (using C<die>) from the hook function. If an
+error is thrown during 'before' processing the real call to C<require>
+will not take place. In this way it is possible to simulate a module
+being unavailable.
+
+See L<Devel::TraceLoad> for a complete example of this interface.
+
+=cut
+
 sub register_require_hook { push @hooks, @_ }
 
 1;
 
 __END__
-
-=head1 NAME
-
-Devel::TraceLoad::Hook - Install a hook function to be called for each require.
-
-=head1 VERSION
-
-This document describes Devel::TraceLoad::Hook version 0.9.0
-
-=head1 SYNOPSIS
-
-=head1 DESCRIPTION
-
-=head1 INTERFACE 
-
-=over
-
-=item C<< register_require_hook >>
-
-Register a function to be called immediately before and after each
-C<require> (and C<use>).
-
-=back
 
 =head1 CONFIGURATION AND ENVIRONMENT
   

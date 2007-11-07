@@ -19,3 +19,5 @@ Revision history for Devel-TraceLoad
 0.9.0   2007-08-04
     - complete rewrite
 
+0.9.1   2007-11-07
+    - 20.traceload.t added to manifest. Oops.

@@ -6,6 +6,7 @@ MANIFEST
 README
 t/00.load.t
 t/10.hook.t
+t/20.traceload.t
 t/lib/Test/SyntheticModule.pm
 t/pod-coverage.t
 t/pod.t

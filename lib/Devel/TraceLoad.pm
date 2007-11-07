@@ -14,12 +14,12 @@ Devel::TraceLoad - Discover which modules a Perl program loads.
 
 =head1 VERSION
 
-This document describes Devel::TraceLoad version 0.9.0
+This document describes Devel::TraceLoad version 0.9.1
 
 =cut
 
 use vars qw/$VERSION/;
-$VERSION = '0.9.0';
+$VERSION = '0.9.1';
 
 use constant OUTFILE => 'traceload';
 
@@ -307,6 +307,40 @@ __END__
 =head1 DESCRIPTION
 
 =head1 INTERFACE 
+
+Typically C<Devel::TraceLoad> will be loaded from the command line:
+
+    $ perl -MDevel::TraceLoad=summary my_prog.pl
+
+A number of options are recognised.
+
+=over
+
+=item C<after>
+
+Display a summary of required modules after execution.
+
+=item C<during>
+
+Display requires as they happen.
+
+=item C<yaml>
+
+Write a YAML format summary to traceload.yaml.
+
+=item C<dump>
+
+Dump output to a file called 'traceload' in the current dir.
+
+=item C<summary>
+
+Display summary of dependencies after execution.
+
+=item C<stdout>
+
+Output to STDOUT instead of STDERR.
+
+=back
 
 =head1 CONFIGURATION AND ENVIRONMENT
   
