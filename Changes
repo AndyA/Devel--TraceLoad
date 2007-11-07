@@ -19,3 +19,13 @@ Revision history for Devel-TraceLoad
 0.9.0   2007-08-04
     - complete rewrite
 
+0.9.1   2007-11-07
+    - 20.traceload.t added to manifest. Oops.
+    
+1.0.0   2007-11-07
+    - Because 0.08 > 0.9.1:
+       in file: Devel-TraceLoad-0.9.1/lib/Devel/TraceLoad.pm
+        status: Not indexed because lib/Devel/TraceLoad.pm in
+                P/PV/PVERD/Devel-TraceLoad-0.08.zip has a higher version
+                number (0.08)
+      Not completely intuitive that.
