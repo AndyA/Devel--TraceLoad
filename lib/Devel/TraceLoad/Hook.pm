@@ -9,7 +9,7 @@ Devel::TraceLoad::Hook - Install a hook function to be called for each require.
 
 =head1 VERSION
 
-This document describes Devel::TraceLoad::Hook version 0.9.1
+This document describes Devel::TraceLoad::Hook version 0.9.2
 
 =head1 SYNOPSIS
 
@@ -31,7 +31,7 @@ use base qw(Exporter);
 use vars qw/$VERSION @EXPORT_OK/;
 
 @EXPORT_OK = qw( register_require_hook );
-$VERSION   = '0.9.1';
+$VERSION   = '0.9.2';
 
 my @hooks;
 
