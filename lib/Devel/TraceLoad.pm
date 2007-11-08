@@ -11,12 +11,12 @@ Devel::TraceLoad - Discover which modules a Perl program loads.
 
 =head1 VERSION
 
-This document describes Devel::TraceLoad version 1.0.1
+This document describes Devel::TraceLoad version 1.01
 
 =cut
 
 use vars qw( $VERSION );
-$VERSION = '1.0.1';
+$VERSION = '1.01';
 
 use constant OUTFILE => 'traceload';
 
@@ -39,11 +39,6 @@ sub _option {
 sub _is_version {
     my $ver = shift;
     return unless defined $ver;
-    # if ( isvstring( $ver ) ) {
-    #     my ( $num, @parts ) = map ord, split //, $ver;
-    #     # Convert to fp number
-    #     return $num . '.' . join( '', map { sprintf( "%03d", $_ ) } @parts );
-    # }
     return $ver if $ver =~ /^ \d+ (?: [.] \d+ )* $/x;
     return;
 }
