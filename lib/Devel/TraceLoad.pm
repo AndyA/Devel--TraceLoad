@@ -361,10 +361,10 @@ L<http://rt.cpan.org>.
 
 =head1 AUTHOR
 
+Andy Armstrong  C<< <andy@hexten.net> >>
+
 Original version by Philippe Verdret C<< <pverdret@dalet.com> >>, from
 the basis of an idea of Joshua Pritikin C<< <vishnu@pobox.com> >>.
-
-This release by Andy Armstrong  C<< <andy@hexten.net> >>
 
 =head1 LICENCE AND COPYRIGHT
 
