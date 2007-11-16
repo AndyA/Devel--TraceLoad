@@ -22,6 +22,6 @@ requires:
   File::Spec: 0
   File::Temp: 0
   Scalar::Util: 0
+  YAML: 0
   perl: 5.8.0
-version: 1.01
-
+version: 1.02

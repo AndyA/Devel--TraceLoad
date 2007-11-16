@@ -33,3 +33,8 @@ Revision history for Devel-TraceLoad
 1.0.1   2007-11-08
     - Switch to Module::Install
     - Remove vstring support
+
+1.01    2007-11-16
+    - Made YAML a dependency
+
+1.02
