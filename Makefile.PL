@@ -14,7 +14,8 @@ requires 'Data::Dumper' => 0;
 requires 'File::Spec'   => 0;
 requires 'File::Path'   => 0;
 requires 'File::Temp'   => 0;
+requires 'YAML'         => 0;
 license 'perl';
 perl_version '5.008';
 
-WriteAll(sign => 1);
+WriteAll( sign => 1 );
