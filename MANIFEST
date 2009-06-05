@@ -9,6 +9,7 @@ inc/Module/Install/Makefile.pm
 inc/Module/Install/Metadata.pm
 inc/Module/Install/Win32.pm
 inc/Module/Install/WriteAll.pm
+inc/MyBuilder.pm
 lib/Devel/TraceLoad.pm
 lib/Devel/TraceLoad/Hook.pm
 Makefile.PL

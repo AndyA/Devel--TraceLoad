@@ -1,14 +1,20 @@
 \.tmproj$
 \.tar\.gz$
 \B\.svn\b
+\B\.git\b
 ^\.cvsignore
+^\.gitignore
 
 # Makemaker generated files and dirs.
 ^MANIFEST\.
 ^Makefile$
+^Build$
 ^andy/
+^incoming/
+^t/disabled/
 ^blib/
 ^pm_to_blib$
+^_build/
 
 # Temp, old and emacs backup files.
 ~$
@@ -20,4 +26,7 @@
 ^try[.]store$
 ^TODO$
 \.swp$
-^traceload
+^\.prove$
+^Devel-TraceLoad-
+^Session\.vim$
+^tools/

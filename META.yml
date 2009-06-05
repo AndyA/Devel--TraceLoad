@@ -1,27 +1,30 @@
---- 
-abstract: Discover which modules a Perl program loads.
-author: 
-  - Andy Armstrong  C<< <andy@hexten.net> >>
-build_requires: 
-  Test::Deep: 0.096
-  Test::More: 0
-distribution_type: module
-generated_by: Module::Install version 0.68
-license: perl
-meta-spec: 
-  url: http://module-build.sourceforge.net/META-spec-v1.3.html
-  version: 1.3
+---
 name: Devel-TraceLoad
-no_index: 
-  directory: 
-    - inc
-    - t
-requires: 
+version: 1.02
+author:
+  - 'Andy Armstrong  C<< <andy@hexten.net> >>'
+abstract: Discover which modules a Perl program loads.
+license: perl
+resources:
+  license: http://dev.perl.org/licenses/
+requires:
   Data::Dumper: 0
   File::Path: 0
   File::Spec: 0
   File::Temp: 0
   Scalar::Util: 0
   YAML: 0
-  perl: 5.8.0
-version: 1.02
+build_requires:
+  Test::Deep: 0.096
+  Test::More: 0
+provides:
+  Devel::TraceLoad:
+    file: lib/Devel/TraceLoad.pm
+    version: 1.02
+  Devel::TraceLoad::Hook:
+    file: lib/Devel/TraceLoad/Hook.pm
+    version: 1.02
+generated_by: Module::Build version 0.33
+meta-spec:
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4
