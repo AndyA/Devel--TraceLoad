@@ -16,45 +16,45 @@ my $base_dir;
 my $next_module = 'AAAAAAAA';
 
 BEGIN {
-    $base_dir = tempdir();
-    # Include our temp directory in @INC
-    unshift @INC, $base_dir;
+  $base_dir = tempdir();
+  # Include our temp directory in @INC
+  unshift @INC, $base_dir;
 }
 
 sub make_module_name {
-    return 'Synthetic::' . $next_module++;
+  return 'Synthetic::' . $next_module++;
 }
 
 sub _make_file_name {
-    return File::Spec->catfile( $base_dir, split( /::/, $_[0] . '.pm' ) );
+  return File::Spec->catfile( $base_dir, split( /::/, $_[0] . '.pm' ) );
 }
 
 sub _dirname {
-    my ( $v, $d, undef ) = File::Spec->splitpath( $_[0] );
-    return File::Spec->catpath( $v, $d, '' );
+  my ( $v, $d, undef ) = File::Spec->splitpath( $_[0] );
+  return File::Spec->catpath( $v, $d, '' );
 }
 
 sub make_module {
-    my ( $src, $name ) = @_;
-    $name = make_module_name() unless defined $name;
-    my $file = _make_file_name( $name );
+  my ( $src, $name ) = @_;
+  $name = make_module_name() unless defined $name;
+  my $file = _make_file_name( $name );
 
-    my @src = 'ARRAY' eq ref $src ? @$src : ( $src );
-    unshift @src, "package $name;";
-    push @src, "1;";
+  my @src = 'ARRAY' eq ref $src ? @$src : ( $src );
+  unshift @src, "package $name;";
+  push @src, "1;";
 
-    mkpath( _dirname( $file ) );
+  mkpath( _dirname( $file ) );
 
-    # Write the module
-    open my $mh, '>', $file or croak "Can't write $file ($!)\n";
-    print $mh join("\n", @src), "\n";
-    close $mh;
+  # Write the module
+  open my $mh, '>', $file or croak "Can't write $file ($!)\n";
+  print $mh join( "\n", @src ), "\n";
+  close $mh;
 
-    return wantarray ? ( $name, $file ) : $name;
+  return wantarray ? ( $name, $file ) : $name;
 }
 
 END {
-    rmtree( $base_dir ) if defined $base_dir;
+  rmtree( $base_dir ) if defined $base_dir;
 }
 
 1;
