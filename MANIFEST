@@ -12,7 +12,6 @@ inc/Module/Install/WriteAll.pm
 inc/MyBuilder.pm
 lib/Devel/TraceLoad.pm
 lib/Devel/TraceLoad/Hook.pm
-Makefile.PL
 MANIFEST
 META.yml
 README
