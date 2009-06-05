@@ -21,242 +21,243 @@ $VERSION = '1.02';
 use constant OUTFILE => 'traceload';
 
 my %opts = (
-    after   => 0,    # Display summary after execution
-    during  => 0,    # Display loads as they happen
-    yaml    => 0,    # Summary is YAML, implies after
-    dump    => 0,    # Dump to 'traceload' in the current dir
-    summary => 0,    # Display summary of dependencies
-    stdout  => 0,    # Output to stdout
+  after   => 0,    # Display summary after execution
+  during  => 0,    # Display loads as they happen
+  yaml    => 0,    # Summary is YAML, implies after
+  dump    => 0,    # Dump to 'traceload' in the current dir
+  summary => 0,    # Display summary of dependencies
+  stdout  => 0,    # Output to stdout
 );
 
 # Naughty: used by the test suite
 sub _option {
-    my $name = shift;
-    $opts{$name} = shift if @_;
-    return $opts{name};
+  my $name = shift;
+  $opts{$name} = shift if @_;
+  return $opts{name};
 }
 
 sub _is_version {
-    my $ver = shift;
-    return unless defined $ver;
-    return $ver if $ver =~ /^ \d+ (?: [.] \d+ )* $/x;
-    return;
+  my $ver = shift;
+  return unless defined $ver;
+  return $ver if $ver =~ /^ \d+ (?: [.] \d+ )* $/x;
+  return;
 }
 
 sub _get_version {
-    my $pkg = shift;
-    no strict 'refs';
-    return _is_version( ${"${pkg}::VERSION"} );
+  my $pkg = shift;
+  no strict 'refs';
+  return _is_version( ${"${pkg}::VERSION"} );
 }
 
 sub _get_module {
-    my $file = shift;
-    return $file if $file =~ m{^/};
-    $file =~ s{/}{::}g;
-    $file =~ s/[.]pm$//;
-    return $file;
+  my $file = shift;
+  return $file if $file =~ m{^/};
+  $file =~ s{/}{::}g;
+  $file =~ s/[.]pm$//;
+  return $file;
 }
 
 sub _text_out {
-    my ( $fh, $log, $depth ) = @_;
-    my $pad = '  ' x $depth;
+  my ( $fh, $log, $depth ) = @_;
+  my $pad = '  ' x $depth;
 
-    for my $info ( @$log ) {
-        my @comment = ();
+  for my $info ( @$log ) {
+    my @comment = ();
 
-        push @comment, defined $info->{version}
-          ? "version: $info->{version}"
-          : 'no version';
+    push @comment,
+     defined $info->{version}
+     ? "version: $info->{version}"
+     : 'no version';
 
-        if ( my $err = $info->{error} ) {
-            $err =~ s/\(.*//g;
-            $err =~ s/\s+/ /g;
-            $err =~ s/\s+$//;
-            push @comment, "error: $err";
-        }
-
-        print $fh sprintf( "%s%s (%s), line %d: %s%s\n",
-            $pad, $info->{file}, $info->{pkg}, $info->{line}, $info->{module},
-            ( @comment ? ' (' . join( ', ', @comment ) . ')' : '' ) );
-        _text_out( $fh, $info->{nested}, $depth + 1 );
+    if ( my $err = $info->{error} ) {
+      $err =~ s/\(.*//g;
+      $err =~ s/\s+/ /g;
+      $err =~ s/\s+$//;
+      push @comment, "error: $err";
     }
+
+    print $fh sprintf( "%s%s (%s), line %d: %s%s\n",
+      $pad, $info->{file}, $info->{pkg}, $info->{line}, $info->{module},
+      ( @comment ? ' (' . join( ', ', @comment ) . ')' : '' ) );
+    _text_out( $fh, $info->{nested}, $depth + 1 );
+  }
 }
 
 sub _gather_deps {
-    my ( $by_dep, $log ) = @_;
-    for my $info ( @$log ) {
-        push @{ $by_dep->{ $info->{module} } }, $info;
-        _gather_deps( $by_dep, $info->{nested} );
-    }
+  my ( $by_dep, $log ) = @_;
+  for my $info ( @$log ) {
+    push @{ $by_dep->{ $info->{module} } }, $info;
+    _gather_deps( $by_dep, $info->{nested} );
+  }
 }
 
 sub _underline {
-    my $str = shift;
-    return "\n$str\n" . ( '=' x length( $str ) ) . "\n\n";
+  my $str = shift;
+  return "\n$str\n" . ( '=' x length( $str ) ) . "\n\n";
 }
 
 {
-    my @load_log    = ();
-    my @version_log = ();
+  my @load_log    = ();
+  my @version_log = ();
 
-    sub import {
-        my $class = shift;
+  sub import {
+    my ( $class, @args ) = @_;
 
-        # Parse args
-        for my $arg ( @_ ) {
-            my $set = ( $arg =~ s/^([+-])(.+)/$2/ ) ? ( $1 eq '+' || 0 ) : 1;
-            croak "Unknown option: $arg" unless exists $opts{$arg};
-            $opts{$arg} = $set;
-        }
-
-        # dump, yaml imply after
-        $opts{after} ||= $opts{yaml} || $opts{dump};
-
-        $opts{fh}        = $opts{stdout} ? \*STDOUT : \*STDERR;
-        $opts{dump_name} = OUTFILE;
-        $opts{enabled}   = 1;
-
-        if ( $opts{yaml} ) {
-            eval 'use YAML';
-            if ( $@ ) {
-                $opts{yaml}  = 0;
-                $opts{after} = 0;
-                croak "YAML not available";
-            }
-            $opts{dump_name} .= '.yaml';
-        }
-
-        my @stack   = ( \@load_log );
-        my $exclude = qr{ [.] (?: al | ix ) $}x;
-
-        # Register callback function
-        register_require_hook(
-            sub {
-                my ( $when, $depth, $arg, $p, $f, $l, $rc, $err ) = @_;
-
-                return unless $opts{enabled};
-                return if $arg =~ $exclude;
-
-                # require <version>
-                if ( my $ver = _is_version( $arg ) ) {
-                    if ( $when eq 'before' ) {
-                        my $info = {
-                            file    => $f,
-                            line    => $l,
-                            pkg     => $p,
-                            version => $ver,    # Version desired
-                        };
-
-                        push @version_log, $info;
-                    }
-                }
-                else {
-                    if ( $when eq 'before' ) {
-                        my $module = _get_module( $arg );
-
-                        if ( $opts{during} ) {
-                            my $pad = '  ' x ( $depth - 1 );
-                            my $fh = $opts{fh};
-                            print $fh "$pad$f, line $l: $module\n";
-                        }
-
-                        my $info = {
-                            file   => $f,         # File executing require
-                            line   => $l,         # Line # of require
-                            pkg    => $p,         # Package executing require
-                            module => $module,    # Module being required
-                            nested => [],         # List of nested requires
-                        };
-
-                        push @{ $stack[-1] }, $info;
-                        push @stack, $info->{nested};
-                    }
-                    elsif ( $when eq 'after' ) {
-                        pop @stack;
-                        my $info = $stack[-1][-1];
-                        $info->{rc} = $rc;
-                        if ( $err ) {
-                            $info->{error} = $err;
-                        }
-                        else {
-                            $info->{version} = _get_version( $info->{module} );
-                        }
-                    }
-                }
-            }
-        );
+    # Parse args
+    for my $arg ( @args ) {
+      my $set = ( $arg =~ s/^([+-])(.+)/$2/ ) ? ( $1 eq '+' || 0 ) : 1;
+      croak "Unknown option: $arg" unless exists $opts{$arg};
+      $opts{$arg} = $set;
     }
 
-    END {
-        if ( $opts{after} ) {
-            $opts{enabled} = 0;
-            my $fh = $opts{fh};
-            if ( $opts{dump} ) {
-                open $fh, '>', $opts{dump_name}
-                  or croak "Can't write $opts{dump_name} ($!)";
-            }
+    # dump, yaml imply after
+    $opts{after} ||= $opts{yaml} || $opts{dump};
 
-            if ( $opts{yaml} ) {
-                print $fh Dump( \@load_log );
-            }
-            else {
-                print $fh _underline( "Loaded Modules" );
-                if ( @load_log ) {
-                    _text_out( $fh, \@load_log, 0 );
-                }
-                else {
-                    print $fh "No modules loaded\n";
-                }
-            }
-        }
+    $opts{fh}        = $opts{stdout} ? \*STDOUT : \*STDERR;
+    $opts{dump_name} = OUTFILE;
+    $opts{enabled}   = 1;
 
-        if ( $opts{summary} ) {
-            my $fh = $opts{fh};
-
-            # Cross-reference of loaded modules
-            print $fh _underline( "Loaded Modules Cross Reference" );
-
-            my %loaded = ();
-            _gather_deps( \%loaded, \@load_log );
-            if ( %loaded ) {
-
-                my $cmp_info = sub {
-                    return lc $a->{pkg} cmp lc $b->{pkg}
-                      || $a->{line} <=> $b->{line};
-                };
-
-                for my $module ( sort { lc $a cmp lc $b } keys %loaded ) {
-                    my $ver = _get_version( $module );
-                    print $fh $module, defined $ver ? " ($ver)" : '', "\n";
-
-                    for my $info ( sort $cmp_info @{ $loaded{$module} } ) {
-                        print $fh sprintf( "    %s (%s), line %d\n",
-                            $info->{file}, $info->{pkg}, $info->{line} );
-                    }
-                }
-            }
-            else {
-                print $fh "No modules loaded\n";
-            }
-
-            # Required versions
-            print $fh _underline( "Required versions" );
-            if ( @version_log ) {
-                for my $ver ( sort { $b->{version} <=> $a->{version} }
-                    @version_log ) {
-                    print $fh sprintf(
-                        "%12s %s (%s), line %d\n",
-                        $ver->{version}, $ver->{file},
-                        $ver->{pkg},     $ver->{line}
-                    );
-                }
-            }
-            else {
-                print $fh "No versions required\n";
-            }
-
-        }
+    if ( $opts{yaml} ) {
+      eval 'use YAML';
+      if ( $@ ) {
+        $opts{yaml}  = 0;
+        $opts{after} = 0;
+        croak "YAML not available";
+      }
+      $opts{dump_name} .= '.yaml';
     }
+
+    my @stack   = ( \@load_log );
+    my $exclude = qr{ [.] (?: al | ix ) $}x;
+
+    # Register callback function
+    register_require_hook(
+      sub {
+        my ( $when, $depth, $arg, $p, $f, $l, $rc, $err ) = @_;
+
+        return unless $opts{enabled};
+        return if $arg =~ $exclude;
+
+        # require <version>
+        if ( my $ver = _is_version( $arg ) ) {
+          if ( $when eq 'before' ) {
+            my $info = {
+              file    => $f,
+              line    => $l,
+              pkg     => $p,
+              version => $ver,    # Version desired
+            };
+
+            push @version_log, $info;
+          }
+        }
+        else {
+          if ( $when eq 'before' ) {
+            my $module = _get_module( $arg );
+
+            if ( $opts{during} ) {
+              my $pad = '  ' x ( $depth - 1 );
+              my $fh = $opts{fh};
+              print $fh "$pad$f, line $l: $module\n";
+            }
+
+            my $info = {
+              file   => $f,         # File executing require
+              line   => $l,         # Line # of require
+              pkg    => $p,         # Package executing require
+              module => $module,    # Module being required
+              nested => [],         # List of nested requires
+            };
+
+            push @{ $stack[-1] }, $info;
+            push @stack, $info->{nested};
+          }
+          elsif ( $when eq 'after' ) {
+            pop @stack;
+            my $info = $stack[-1][-1];
+            $info->{rc} = $rc;
+            if ( $err ) {
+              $info->{error} = $err;
+            }
+            else {
+              $info->{version} = _get_version( $info->{module} );
+            }
+          }
+        }
+      }
+    );
+  }
+
+  END {
+    if ( $opts{after} ) {
+      $opts{enabled} = 0;
+      my $fh = $opts{fh};
+      if ( $opts{dump} ) {
+        open $fh, '>', $opts{dump_name}
+         or croak "Can't write $opts{dump_name} ($!)";
+      }
+
+      if ( $opts{yaml} ) {
+        print $fh Dump( \@load_log );
+      }
+      else {
+        print $fh _underline( "Loaded Modules" );
+        if ( @load_log ) {
+          _text_out( $fh, \@load_log, 0 );
+        }
+        else {
+          print $fh "No modules loaded\n";
+        }
+      }
+    }
+
+    if ( $opts{summary} ) {
+      my $fh = $opts{fh};
+
+      # Cross-reference of loaded modules
+      print $fh _underline( "Loaded Modules Cross Reference" );
+
+      my %loaded = ();
+      _gather_deps( \%loaded, \@load_log );
+      if ( %loaded ) {
+
+        my $cmp_info = sub {
+          return lc $a->{pkg} cmp lc $b->{pkg}
+           || $a->{line} <=> $b->{line};
+        };
+
+        for my $module ( sort { lc $a cmp lc $b } keys %loaded ) {
+          my $ver = _get_version( $module );
+          print $fh $module, defined $ver ? " ($ver)" : '', "\n";
+
+          for my $info ( sort $cmp_info @{ $loaded{$module} } ) {
+            print $fh sprintf( "    %s (%s), line %d\n",
+              $info->{file}, $info->{pkg}, $info->{line} );
+          }
+        }
+      }
+      else {
+        print $fh "No modules loaded\n";
+      }
+
+      # Required versions
+      print $fh _underline( "Required versions" );
+      if ( @version_log ) {
+        for my $ver ( sort { $b->{version} <=> $a->{version} }
+          @version_log ) {
+          print $fh sprintf(
+            "%12s %s (%s), line %d\n",
+            $ver->{version}, $ver->{file},
+            $ver->{pkg},     $ver->{line}
+          );
+        }
+      }
+      else {
+        print $fh "No versions required\n";
+      }
+
+    }
+  }
 }
 
 1;
