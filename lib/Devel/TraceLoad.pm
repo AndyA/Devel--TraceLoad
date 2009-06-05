@@ -11,12 +11,12 @@ Devel::TraceLoad - Discover which modules a Perl program loads.
 
 =head1 VERSION
 
-This document describes Devel::TraceLoad version 1.02
+This document describes Devel::TraceLoad version 1.03
 
 =cut
 
 use vars qw( $VERSION );
-$VERSION = '1.02';
+$VERSION = '1.03';
 
 use constant OUTFILE => 'traceload';
 
