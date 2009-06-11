@@ -11,6 +11,9 @@ use Test::SyntheticModule qw/make_module/;
 my $PERL = $^X;
 my @INCLUDE = map { "-I$_" } @INC[ 0 .. 3 ];    # Fragile
 
+# Protect from modules loaded in PERL5OPT
+local $ENV{PERL5OPT};
+
 my @schedule;
 
 {
@@ -26,8 +29,7 @@ my @schedule;
 
 BEGIN {
   my $is_syn_package = re( qr{ ^ Synthetic::\w+ $}x );
-  @schedule = (
-    {
+  @schedule = ( {
       name    => 'Summary',
       options => 'stdout,summary',
       setup   => sub {
@@ -58,8 +60,7 @@ BEGIN {
         return "use $module";
       },
       stdout => [],
-      yaml   => [
-        {
+      yaml   => [ {
           'rc'      => '1',
           'version' => undef,
           'pkg'     => 'main',
@@ -69,8 +70,7 @@ BEGIN {
           'line'    => '1'
         }
       ],
-    }
-  );
+    } );
 
   my @test_keys = qw/stdout stderr yaml/;
   my $tests     = 0;
@@ -91,7 +91,7 @@ for my $test ( @schedule ) {
 
   my $script = $test->{setup}->();
 
-  my @cmd = ( $PERL, @INCLUDE, $dtl, '-e', $script );
+  my @cmd = ( $PERL, @INCLUDE, $dtl, -f => -e => $script );
 
   my $cmd = join( ' ', @cmd );
   #diag "Running $cmd\n";
