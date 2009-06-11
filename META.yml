@@ -1,6 +1,7 @@
 ---
 name: Devel-TraceLoad
-version: 1.03
+version: 1.04
+
 author:
   - 'Andy Armstrong <andy@hexten.net>'
 abstract: Discover which modules a Perl program loads.
