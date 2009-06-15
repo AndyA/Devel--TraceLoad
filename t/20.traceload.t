@@ -8,6 +8,9 @@ use YAML qw/LoadFile/;
 use lib qw(t/lib);
 use Test::SyntheticModule qw/make_module/;
 
+use constant HAS_F => $] >= 5.009002
+ || ( $] >= 5.008007 && $] < 5.009000 );
+
 my $PERL = $^X;
 my @INCLUDE = map { "-I$_" } @INC[ 0 .. 3 ];    # Fragile
 
@@ -91,7 +94,8 @@ for my $test ( @schedule ) {
 
   my $script = $test->{setup}->();
 
-  my @cmd = ( $PERL, @INCLUDE, $dtl, -f => -e => $script );
+  my @cmd = ( $PERL, @INCLUDE, $dtl, ( HAS_F ? ( '-f' ) : () ), '-e',
+    $script );
 
   my $cmd = join( ' ', @cmd );
   #diag "Running $cmd\n";
@@ -122,3 +126,4 @@ for my $test ( @schedule ) {
     }
   }
 }
+
